@@ -1311,12 +1311,8 @@ static void PrintStackFrame(uint32_t aFrameNumber, void* aPC, void* aSP,
   EnsureWrite(stream, buf, len);
 }
 
-static bool WalkTheStackEnabled() {
-  static bool result = [] {
-    char* value = getenv("MOZ_DISABLE_WALKTHESTACK");
-    return !(value && value[0]);
-  }();
-  return result;
+static inline constexpr bool WalkTheStackEnabled() {
+  return false;
 }
 
 MFBT_API void MozWalkTheStack(FILE* aStream, const void* aFirstFramePC,
