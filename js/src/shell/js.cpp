@@ -14339,3 +14339,15 @@ bool InitModuleLoader(JSContext* cx, const OptionParser& op) {
 
   return true;
 }
+
+uint32_t checkGreedyGC() {
+  return 0x80000000;
+}
+
+void* sboxAlloc(uint32_t alignment, uint32_t size) {
+  return nullptr;
+}
+
+bool sboxFree(void* ptr) {
+  return false;
+}

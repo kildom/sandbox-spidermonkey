@@ -85,6 +85,8 @@ using namespace js;
 using mozilla::DebugOnly;
 using mozilla::NumberEqualsInt32;
 
+uint32_t checkGreedyGC();
+
 template <bool Eq>
 static MOZ_ALWAYS_INLINE bool LooseEqualityOp(JSContext* cx,
                                               InterpreterRegs& regs) {
@@ -1757,6 +1759,16 @@ bool js::AddDisposableResourceToCapability(JSContext* cx,
 
 bool MOZ_NEVER_INLINE JS_HAZ_JSNATIVE_CALLER js::Interpret(JSContext* cx,
                                                            RunState& state) {
+
+  uint32_t greedyGCThreshold = 0;
+
+#define GREEDY_GC() \
+      do { \
+        if (gc::trackedZoneBytes > greedyGCThreshold) { \
+          greedyGCThreshold = checkGreedyGC(); \
+        } \
+      } while (0)
+
 /*
  * Define macros for an interpreter loop. Opcode dispatch is done by
  * indirect goto (aka a threaded interpreter), which is technically
@@ -1803,6 +1815,7 @@ bool MOZ_NEVER_INLINE JS_HAZ_JSNATIVE_CALLER js::Interpret(JSContext* cx,
   JS_BEGIN_MACRO                                 \
     REGS.pc += (N);                              \
     SANITY_CHECKS();                             \
+    GREEDY_GC();                                 \
     DISPATCH_TO(*REGS.pc | activation.opMask()); \
   JS_END_MACRO
 

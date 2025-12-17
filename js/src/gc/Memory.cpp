@@ -59,6 +59,35 @@ MOZ_ALWAYS_INLINE void* MozVirtualAlloc(LPVOID lpAddress, SIZE_T dwSize,
 }  // namespace mozilla
 #endif  // defined(XP_WIN) && !defined(MOZ_MEMORY)
 
+#if defined(__wasi__)
+
+/* SpiderMonkey uses this file to allocate mostly 1MB chunks of memory with 1MB of alignment.
+ * The dlmalloc allocator implementation from wasilibc generates a lot of fragmentation
+ * when allocating with big alignment. It uses almost two times more memory than requested.
+ * The gaps can be filled with smaller unaligned allocation, but it is not enough to overcome
+ * this problem.
+ *
+ * The following definitions allows to use a different allocator designed for this purpose.
+ * If it fails, the system allocator (dlmalloc) is used.
+ */
+
+static_assert(js::gc::ChunkSize == 1024 * 1024,
+  "Alterative allocator is designed for 1MB chunks only.");
+
+/*
+ * Allocates `size` bytes of memory aligned to `alignment`.
+ * Returns nullptr on failure or when provided parameters are not supported.
+ */
+void* sboxAlloc(uint32_t alignment, uint32_t size);
+
+/*
+ * Frees memory allocated by sboxAlloc.
+ * Returns false if the pointer was not allocated by sboxAlloc.
+ */
+bool sboxFree(void* ptr);
+
+#endif // __wasi__
+
 namespace js::gc {
 
 /*
@@ -245,6 +274,8 @@ static inline void* MapInternal(void* desired, size_t length) {
     region = VirtualAlloc(desired, length, flags, DWORD(PageAccess::ReadWrite));
   }
 #elif defined(__wasi__)
+  region = sboxAlloc(gc::SystemPageSize(), length);
+  if (!region) // fallback to next if statement
   if (int err = posix_memalign(&region, gc::SystemPageSize(), length)) {
     MOZ_RELEASE_ASSERT(err == ENOMEM);
     return nullptr;
@@ -270,6 +301,7 @@ static inline void UnmapInternal(void* region, size_t length) {
 #ifdef XP_WIN
   MOZ_RELEASE_ASSERT(VirtualFree(region, 0, MEM_RELEASE) != 0);
 #elif defined(__wasi__)
+  if (!sboxFree(region)) // fallback to next statement
   free(region);
 #else
   if (munmap(region, length)) {
@@ -553,6 +585,8 @@ void* MapAlignedPages(size_t length, size_t alignment,
 
 #ifdef __wasi__
   void* region = nullptr;
+  region = sboxAlloc(alignment, length);
+  if (!region) // fallback to next if statement
   if (int err = posix_memalign(&region, alignment, length)) {
     MOZ_ASSERT(err == ENOMEM);
     (void)err;

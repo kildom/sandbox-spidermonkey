@@ -39,6 +39,8 @@ Zone* const Zone::NotOnList = reinterpret_cast<Zone*>(1);
 
 ZoneAllocator::ZoneAllocator(JSRuntime* rt, Kind kind)
     : JS::shadow::Zone(rt, rt->gc.marker().tracer(), kind),
+      gcHeapSize(true),
+      mallocHeapSize(true),
       jitHeapThreshold(size_t(jit::MaxCodeBytesPerProcess * 0.8)) {}
 
 ZoneAllocator::~ZoneAllocator() {
@@ -982,4 +984,9 @@ bool Zone::registerObjectWithWeakPointers(JSObject* obj) {
   MOZ_ASSERT(obj->getClass()->hasTrace());
   MOZ_ASSERT(!IsInsideNursery(obj));
   return objectsWithWeakPointers.ref().append(obj);
+}
+
+size_t realHeapBytes(JSContext* cx) {
+  auto allocator = ZoneAllocator::from(cx->zone());
+  return allocator->mallocHeapSize.bytes() + allocator->jitHeapSize.bytes();
 }

@@ -574,6 +574,8 @@ static const size_t MaxMarkingThreads = 2;
 
 }  // namespace TuningDefaults
 
+extern uint32_t trackedZoneBytes;
+
 /*
  * Encapsulates all of the GC tunables. These are effectively constant and
  * should only be modified by setParameter.
@@ -656,8 +658,10 @@ class HeapSize {
    */
   AtomicByteCount retainedBytes_;
 
+  bool tracked;
+
  public:
-  explicit HeapSize() {
+  explicit HeapSize(bool tracked = false): tracked(tracked) {
     MOZ_ASSERT(bytes_ == 0);
     MOZ_ASSERT(retainedBytes_ == 0);
   }
@@ -682,6 +686,7 @@ class HeapSize {
     if (updateRetainedSize) {
       retainedBytes_ += nbytes;
     }
+    if (tracked) trackedZoneBytes += nbytes;
   }
   void removeBytes(size_t nbytes, bool updateRetainedSize) {
     if (updateRetainedSize) {
@@ -690,6 +695,7 @@ class HeapSize {
     }
     MOZ_ASSERT(bytes_ >= nbytes);
     bytes_ -= nbytes;
+    if (tracked) trackedZoneBytes -= nbytes;
   }
 };
 
@@ -699,6 +705,8 @@ class HeapSize {
  */
 class HeapSizeChild : public HeapSize {
  public:
+  HeapSizeChild(bool tracked = false) : HeapSize(tracked) {}
+
   void addGCArena(HeapSize& parent) {
     HeapSize::addGCArena();
     parent.addGCArena();
@@ -722,6 +730,8 @@ class HeapSizeChild : public HeapSize {
 
 class PerZoneGCHeapSize : public HeapSizeChild {
  public:
+  PerZoneGCHeapSize(bool tracked = false) : HeapSizeChild(tracked) {}
+
   size_t freedBytes() const { return freedBytes_; }
   void clearFreedBytes() { freedBytes_ = 0; }
 
